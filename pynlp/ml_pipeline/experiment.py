@@ -3,6 +3,7 @@ import sys
 
 import pandas as pd
 import numpy as np
+import matplotlib.pyplot as plt
 from tasks import vua_format as vf
 from ml_pipeline import utils, cnn, preprocessing, pipeline_with_lexicon
 from ml_pipeline import pipelines
@@ -15,6 +16,15 @@ handler = logging.StreamHandler(sys.stdout)
 formatter = logging.Formatter('%(message)s')
 handler.setFormatter(formatter)
 logger.addHandler(handler)
+
+
+def plot(x, y, title, yline=None):
+    plt.plot(x, y)
+    plt.title(title)
+    if yline:
+        plt.axhline(yline)
+    plt.show()
+
 
 def get_sample(xs: np.array, ys: np.array, percentage: float, n: int):
     ones = ys[ys == 'hate']
@@ -43,54 +53,42 @@ def my_run(task_name, data_dir, pipeline_name, print_predictions):
     tsk = task(task_name)
     logger.info('>> Loading data...')
     tsk.load(data_dir)
-    logger.info('>> retrieving train/data instances...')
-    train_X, train_y, test_X, test_y = utils.get_instances(tsk, split_train_dev=False)
-    percentages = np.arange(0, 1.25, .25)
-    if 'trac2018' in data_dir:
-        # remap the y's to just 2 levels so that extra data can be incorporated
-        train_y = train_y.map({'OAG': 'hate', 'CAG': 'hate', 'NAG': 'nothate'})
-        test_y = test_y.map({'OAG': 'hate', 'CAG': 'hate', 'NAG': 'nothate'})
 
+    percentages = np.arange(0, 1.25, .25)
     extra_vua = vf.VuaFormat()
     extra_vua.load(f'/Users/ryansaeta/Desktop/Vrije Universiteit/Y2/S1P1/Subjectivity Mining/ma-course-subjectivity-mining/pynlp/data/extra/')
     etrain_X, etrain_y = extra_vua.train_instances()
-
-    num_to_add = int(0.5 * len(train_y)) # add constant 50% of original data size
 
     accuracies = []
     precisions = []
     recalls = []
     f1s = []
 
+    print('>> Running initial baseline with no added data')
+    logger.info('>> retrieving train/data instances...')
+    init_train_X, init_train_y, test_X, test_y = utils.get_instances(tsk, split_train_dev=False)
+    if 'trac2018' in data_dir:
+        # remap the y's to just 2 levels so that extra data can be incorporated
+        init_train_y = init_train_y.map({'OAG': 'hate', 'CAG': 'hate', 'NAG': 'nothate'})
+        test_y = test_y.map({'OAG': 'hate', 'CAG': 'hate', 'NAG': 'nothate'})
+    init_results = fit_and_eval(pipeline_name, init_train_X, init_train_y, test_X, test_y)
+
+    num_to_add = int(1 * len(init_train_y)) # add constant 50% of original data size
     for percentage in percentages:
+        print(f'>> Running training with percentage: {percentage}')
         etrain_X_to_add, etrain_y_to_add = get_sample(etrain_X, etrain_y, percentage, num_to_add)
-        train_y = pd.concat([train_y, etrain_y_to_add])
-        train_X = pd.concat([train_X, etrain_X_to_add])
-        test_X_ref = test_X
+        train_y = pd.concat([init_train_y, etrain_y_to_add])
+        train_X = pd.concat([init_train_X, etrain_X_to_add])
+        results = fit_and_eval(pipeline_name, train_X, train_y, test_X, test_y)
+        accuracies.append(results['accuracy'])
+        precisions.append(results['macro avg']['precision'])
+        recalls.append(results['macro avg']['recall'])
+        f1s.append(results['macro avg']['f1-score'])
 
-        if pipeline_name.startswith('cnn'):
-            pipe = cnn(pipeline_name)
-            train_X, train_y, test_X, test_y = pipe.encode(train_X, train_y, test_X, test_y)
-            logger.info('>> testing...')
-        else:
-            pipe = pipeline(pipeline_name)
-    
-        logger.info('>> training pipeline ' + pipeline_name)
-        pipe.fit(train_X, train_y)
-        if pipeline_name == 'naive_bayes_counts_lex':
-            logger.info("   -- Found {} tokens in lexicon".format(pipe.tokens_from_lexicon))
-
-        logger.info('>> testing...')
-        sys_y = pipe.predict(test_X)
-
-        logger.info('>> evaluation...')
-        results = utils.eval(test_y, sys_y, output_dict=True)
-        breakpoint()
-        logger.info(utils.eval(test_y, sys_y))
-
-        if print_predictions:
-            logger.info('>> predictions')
-            utils.print_all_predictions(test_X_ref, test_y, sys_y, logger)
+    plot(percentages, accuracies, 'accuracy', yline=init_results['accuracy'])
+    plot(percentages, precisions, 'Macro Avg precision', yline=init_results['macro avg']['precision'])
+    plot(percentages, recalls, 'Macro Avg recall', yline=init_results['macro avg']['recall'])
+    plot(percentages, f1s, 'Macro Avg F1', yline=init_results['macro avg']['f1-score'])
 
 
 def run(task_name, data_dir, pipeline_name, print_predictions, add_extra_training=False):
@@ -134,7 +132,29 @@ def run(task_name, data_dir, pipeline_name, print_predictions, add_extra_trainin
     if print_predictions:
         logger.info('>> predictions')
         utils.print_all_predictions(test_X_ref, test_y, sys_y, logger)
+    return utils.eval(test_y, sys_y, output_dict=True)
 
+
+def fit_and_eval(pipeline_name, train_X, train_y, test_X, test_y):
+    if pipeline_name.startswith('cnn'):
+        pipe = cnn(pipeline_name)
+        train_X, train_y, test_X, test_y = pipe.encode(train_X, train_y, test_X, test_y)
+        logger.info('>> testing...')
+    else:
+        pipe = pipeline(pipeline_name)
+    logger.info(f'>> training pipeline {pipeline_name}')
+    pipe.fit(train_X, train_y)
+    if pipeline_name == 'naive_bayes_counts_lex':
+        logger.info("   -- Found {} tokens in lexicon".format(pipe.tokens_from_lexicon))
+
+    logger.info('>> testing')
+    sys_y = pipe.predict(test_X)
+
+    logger.info('>> evaluation')
+    results = utils.eval(test_y, sys_y, output_dict=True)
+    logger.info(utils.eval(test_y, sys_y))
+
+    return results
 
 def task(name):
     if name == 'vua_format':
