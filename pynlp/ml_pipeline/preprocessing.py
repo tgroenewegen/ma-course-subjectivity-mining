@@ -12,8 +12,6 @@ tt_args = {}
 class Preprocessor(TransformerMixin):
     """preprocesses the data with NLTK and Spacy (lemmatizer)"""
     def __init__(self, tokenize, normalize_tweet, lowercase, lemmatize, lexicon={}):
-        global tt_args
-        # tt_args = {}
         tt_args['reduce_len'] = normalize_tweet
         tt_args['strip_handles'] = normalize_tweet
         tt_args['preserve_case'] = not lowercase
@@ -61,19 +59,9 @@ def tokenize_tweet(tweet):
 
 
 def tokenize_with(kwargs):
-    # global tt_args
-    # tokenizer = TweetTokenizer(tt_args)
-    # tokenizerf = tokenize_tweeter(tokenizer)
+    tokenizer = TweetTokenizer(**kwargs)
     def tweet_tokenizer(data):
-        with Pool(8) as p:
-            l = p.map(tokenize_tweet, data)
-        # l = []
-        # for tweet in data:
-        #     if tweet != tweet:
-        #         breakpoint()
-        #     l.append(' '.join(tokenizer.tokenize(tweet)))
-        return l
-        # return [' '.join(tokenizer.tokenize(tweet)) for tweet in data]
+        return [' '.join(tokenizer.tokenize(tweet)) for tweet in data]
     return tweet_tokenizer
 
 
