@@ -1,3 +1,4 @@
+from typing import Tuple
 from sklearn.pipeline import Pipeline, FeatureUnion
 from ml_pipeline import preprocessing, representation
 from sklearn.naive_bayes import MultinomialNB
@@ -39,8 +40,8 @@ def naive_bayes_tfidf():
     return pipeline(preprocessing.std_prep(), representation.tfidf_vectorizer(), MultinomialNB())
 
 
-def svm_libsvc_counts():
-    return pipeline(preprocessing.std_prep(), representation.count_vectorizer(), svm.LinearSVC(max_iter=10000,
+def svm_libsvc_counts(ngram_range: Tuple[int, int]):
+    return pipeline(preprocessing.std_prep(), representation.count_vectorizer({'ngram_range': ngram_range}), svm.LinearSVC(max_iter=10000,
                                                                                                dual=False, C=0.1))
 
 
