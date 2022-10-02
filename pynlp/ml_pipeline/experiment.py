@@ -39,6 +39,12 @@ def prunner(train_X, train_y, test_X, test_y, max_ngram=None):
     results = utils.eval(test_y, sys_y, output_dict=True)
     # logger.info(utils.eval(test_y, sys_y))
 
+    df=open(f'Balanc {max_ngram}.csv','w', encoding='utf-8')
+    for i in range(0, len(sys_y)):
+        df.write("{}\t{}\t{}".format(sys_y[i], test_y.values[i], test_X[i]))
+        df.write('\n')
+    df.close()
+
     return (results['accuracy'], 
         results['macro avg']['precision'], 
         results['macro avg']['recall'], 
@@ -57,6 +63,8 @@ def my_run2(task_name, data_dir, print_predictions):
     with Pool(cpu_count()) as p:
         expresults = p.starmap(prunner, pargs)
     accuracies, precisions, recalls, f1s = zip(*expresults)
+
+
     plot(max_ngrams, accuracies, 'accuracy')
     plot(max_ngrams, precisions, 'Macro Avg precision')
     plot(max_ngrams, recalls, 'Macro Avg recall')
