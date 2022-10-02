@@ -38,6 +38,9 @@ def prunner(train_X, train_y, test_X, test_y, max_ngram=None):
     logger.info('>> evaluation...')
     results = utils.eval(test_y, sys_y, output_dict=True)
     # logger.info(utils.eval(test_y, sys_y))
+    test_X_ref = test_X
+    logger.info('>> predictions')
+    utils.print_all_predictions(test_X_ref, test_y, sys_y, logger)
 
     df=open(f'Balanc {max_ngram}.csv','w', encoding='utf-8')
     for i in range(0, len(sys_y)):
